@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Apex HQ",
   "version": "0.1.0",
-  "identifier": "com.apexhq.app",
+  "identifier": "com.apexhq.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
