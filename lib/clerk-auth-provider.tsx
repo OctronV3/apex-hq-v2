@@ -8,7 +8,7 @@ import {
   SignUp,
   useUser,
   useClerk,
-} from "@clerk/nextjs";
+} from "@clerk/react";
 import { useRouter } from "next/navigation";
 import { ApexAuthContext, ApexAuthContextValue } from "./auth-context";
 
@@ -59,8 +59,6 @@ export function ClerkAuthProvider({
   return (
     <ClerkProvider
       publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}
-      signInUrl="/sign-in"
-      signUpUrl="/sign-up"
       appearance={{
         variables: {
           colorPrimary: "#ff1a1a",

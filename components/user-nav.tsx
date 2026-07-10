@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const ClerkUserButton = isClerkConfigured
   ? dynamic(
-      () => import("@clerk/nextjs").then((mod) => ({ default: mod.UserButton })),
+      () => import("@clerk/react").then((mod) => ({ default: mod.UserButton })),
       { ssr: false }
     )
   : null;

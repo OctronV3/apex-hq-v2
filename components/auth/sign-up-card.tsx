@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const ClerkSignUp = isClerkConfigured
   ? dynamic(
-      () => import("@clerk/nextjs").then((mod) => ({ default: mod.SignUp })),
+      () => import("@clerk/react").then((mod) => ({ default: mod.SignUp })),
       { ssr: false }
     )
   : null;
