@@ -79,3 +79,14 @@ export interface SocialMetric {
   followers: number;
   growth: number;
 }
+
+export interface KpiStats {
+  mrr: number;
+  mrrGrowth: number;
+  subscribers: number | null;
+  subscriberGrowth: number | null;
+  openRate: number;
+  openRateGrowth: number;
+  totalSponsors: number;
+  sponsorGrowth: number;
+}

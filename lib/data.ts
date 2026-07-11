@@ -1,3 +1,4 @@
+import { computeKpiStats, computeRevenueTimeSeries } from "./analytics";
 import { getSupabase } from "./supabase/client";
 import { isTauri } from "./env";
 import {
@@ -9,6 +10,7 @@ import {
   RevenuePoint,
   TrafficPoint,
   SocialMetric,
+  KpiStats,
 } from "@/types";
 
 const API_BASE = "/api";
@@ -477,23 +479,8 @@ export async function deleteEmail(id: string): Promise<void> {
 
 export async function getRevenueData(): Promise<RevenuePoint[]> {
   if (isTauri()) {
-    const supabase = getSupabase();
-    if (!supabase) return [];
-    const workspaceId = getWorkspaceId();
-    if (!workspaceId) return [];
-    const { data, error } = await supabase
-      .from("analytics_revenue")
-      .select("date, revenue, subscriptions, ads, sponsors")
-      .eq("workspace_id", workspaceId)
-      .order("date", { ascending: true });
-    if (error) throw new Error(error.message);
-    return (data || []).map((row) => ({
-      date: row.date,
-      revenue: row.revenue,
-      subscriptions: row.subscriptions,
-      ads: row.ads,
-      sponsors: row.sponsors,
-    }));
+    const sponsors = await getSponsors();
+    return computeRevenueTimeSeries(sponsors);
   }
 
   const { data } = await fetchJson<{ data: RevenuePoint[] }>(
@@ -559,43 +546,17 @@ export async function getSocialMetrics(): Promise<SocialMetric[]> {
   }));
 }
 
-export async function getKpiStats() {
+export async function getKpiStats(): Promise<KpiStats | null> {
   if (isTauri()) {
-    const supabase = getSupabase();
-    if (!supabase) return null;
     const workspaceId = getWorkspaceId();
     if (!workspaceId) return null;
-    const { data, error } = await supabase
-      .from("kpi_metrics")
-      .select(
-        "mrr, mrr_growth, subscribers, subscriber_growth, open_rate, open_rate_growth, total_sponsors, sponsor_growth"
-      )
-      .eq("workspace_id", workspaceId)
-      .single();
-    if (error) throw new Error(error.message);
-    return {
-      mrr: data.mrr,
-      mrrGrowth: Number(data.mrr_growth),
-      subscribers: data.subscribers,
-      subscriberGrowth: Number(data.subscriber_growth),
-      openRate: data.open_rate,
-      openRateGrowth: Number(data.open_rate_growth),
-      totalSponsors: data.total_sponsors,
-      sponsorGrowth: Number(data.sponsor_growth),
-    };
+    const [sponsors, newsletters] = await Promise.all([
+      getSponsors(),
+      getNewsletters(),
+    ]);
+    return computeKpiStats(sponsors, newsletters);
   }
 
-  const { data } = await fetchJson<{ data: Record<string, unknown> }>(
-    "/analytics?kind=kpi"
-  );
-  return {
-    mrr: data.mrr as number,
-    mrrGrowth: Number(data.mrr_growth),
-    subscribers: data.subscribers as number,
-    subscriberGrowth: Number(data.subscriber_growth),
-    openRate: data.open_rate as number,
-    openRateGrowth: Number(data.open_rate_growth),
-    totalSponsors: data.total_sponsors as number,
-    sponsorGrowth: Number(data.sponsor_growth),
-  };
+  const { data } = await fetchJson<{ data: KpiStats }>("/analytics?kind=kpi");
+  return data;
 }

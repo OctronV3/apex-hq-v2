@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceId } from "@/lib/api-helpers";
+import { computeKpiStats, computeRevenueTimeSeries } from "@/lib/analytics";
+import type { Sponsor, NewsletterItem } from "@/types";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -18,12 +20,24 @@ export async function GET(request: NextRequest) {
   const kind = request.nextUrl.searchParams.get("kind");
 
   if (kind === "revenue") {
-    const { data, error } = await supabase
-      .from("analytics_revenue")
-      .select("date, revenue, subscriptions, ads, sponsors")
-      .eq("workspace_id", workspaceId)
-      .order("date", { ascending: true });
+    const { data: sponsors, error } = await supabase
+      .from("sponsors")
+      .select("id, name, tier, deal_value, status, start_date, end_date, contact")
+      .eq("workspace_id", workspaceId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const mappedSponsors = (sponsors || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      tier: row.tier,
+      dealValue: row.deal_value,
+      status: row.status,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      contact: row.contact,
+    })) satisfies Sponsor[];
+
+    const data = computeRevenueTimeSeries(mappedSponsors);
     return NextResponse.json({ data });
   }
 
@@ -47,12 +61,45 @@ export async function GET(request: NextRequest) {
   }
 
   if (kind === "kpi") {
-    const { data, error } = await supabase
-      .from("kpi_metrics")
-      .select("mrr, mrr_growth, subscribers, subscriber_growth, open_rate, open_rate_growth, total_sponsors, sponsor_growth")
-      .eq("workspace_id", workspaceId)
-      .single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const [{ data: sponsors, error: sponsorError }, { data: newsletters, error: newsletterError }] =
+      await Promise.all([
+        supabase
+          .from("sponsors")
+          .select("id, name, tier, deal_value, status, start_date, end_date, contact")
+          .eq("workspace_id", workspaceId),
+        supabase
+          .from("newsletters")
+          .select("id, title, author, stage, scheduled_at, sent_at, open_rate, click_rate, tags")
+          .eq("workspace_id", workspaceId),
+      ]);
+
+    if (sponsorError) return NextResponse.json({ error: sponsorError.message }, { status: 500 });
+    if (newsletterError) return NextResponse.json({ error: newsletterError.message }, { status: 500 });
+
+    const mappedSponsors = (sponsors || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      tier: row.tier,
+      dealValue: row.deal_value,
+      status: row.status,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      contact: row.contact,
+    })) satisfies Sponsor[];
+
+    const mappedNewsletters = (newsletters || []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      author: row.author,
+      stage: row.stage,
+      scheduledAt: row.scheduled_at,
+      sentAt: row.sent_at,
+      openRate: row.open_rate,
+      clickRate: row.click_rate,
+      tags: row.tags || [],
+    })) satisfies NewsletterItem[];
+
+    const data = computeKpiStats(mappedSponsors, mappedNewsletters);
     return NextResponse.json({ data });
   }
 

@@ -12,6 +12,12 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function formatChange(value: number | null) {
+  if (value == null) return "—";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value}%`;
+}
+
 export function KpiGrid() {
   const { data, isLoading } = useKpis();
 
@@ -19,25 +25,25 @@ export function KpiGrid() {
     {
       label: "Monthly Revenue",
       value: data ? formatCurrency(data.mrr) : "—",
-      change: data ? `+${data.mrrGrowth}%` : "—",
+      change: data ? formatChange(data.mrrGrowth) : "—",
       icon: TrendingUp,
     },
     {
       label: "Subscribers",
-      value: data ? data.subscribers.toLocaleString() : "—",
-      change: data ? `+${data.subscriberGrowth}%` : "—",
+      value: data ? data.subscribers?.toLocaleString() ?? "—" : "—",
+      change: data ? formatChange(data.subscriberGrowth) : "—",
       icon: Users,
     },
     {
       label: "Open Rate",
       value: data ? `${data.openRate}%` : "—",
-      change: data ? `+${data.openRateGrowth}%` : "—",
+      change: data ? formatChange(data.openRateGrowth) : "—",
       icon: MailOpen,
     },
     {
       label: "Active Sponsors",
       value: data ? data.totalSponsors.toString() : "—",
-      change: data ? `+${data.sponsorGrowth}%` : "—",
+      change: data ? formatChange(data.sponsorGrowth) : "—",
       icon: Handshake,
     },
   ];

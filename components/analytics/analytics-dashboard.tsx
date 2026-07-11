@@ -43,25 +43,39 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
 
 const PIE_COLORS = ["#ff1a1a", "#ffffff", "#888888", "#444444"];
 
+function formatChange(value: number | null) {
+  if (value == null) return "—";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value}%`;
+}
+
 function KpiCards() {
   const { data, isLoading } = useKpis();
 
   const cards = [
     { label: "MRR", value: data ? formatCurrency(data.mrr) : "—" },
-    { label: "Subscribers", value: data ? data.subscribers.toLocaleString() : "—" },
+    { label: "Subscribers", value: data ? data.subscribers?.toLocaleString() ?? "—" : "—" },
     { label: "Open Rate", value: data ? `${data.openRate}%` : "—" },
     { label: "Sponsors", value: data ? data.totalSponsors.toString() : "—" },
   ];
 
+  const changes = [
+    data ? formatChange(data.mrrGrowth) : "—",
+    data ? formatChange(data.subscriberGrowth) : "—",
+    data ? formatChange(data.openRateGrowth) : "—",
+    data ? formatChange(data.sponsorGrowth) : "—",
+  ];
+
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {cards.map((card) => (
+      {cards.map((card, idx) => (
         <Card key={card.label} className="border-[#222222] bg-[#0a0a0a]">
           <CardContent className="p-4">
             <p className="text-xs text-[#888888]">{card.label}</p>
             <p className="mt-1 text-xl font-semibold text-white font-mono">
               {isLoading ? "—" : card.value}
             </p>
+            <p className="text-xs text-[#ff1a1a]">{isLoading ? "—" : changes[idx]}</p>
           </CardContent>
         </Card>
       ))}
