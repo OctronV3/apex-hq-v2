@@ -17,6 +17,10 @@ import {
   addSocialPost,
   updateSocialPost,
   deleteSocialPost,
+  getSocialConnections,
+  addSocialConnection,
+  updateSocialConnection,
+  deleteSocialConnection,
   getEmails,
   sendEmail,
   updateEmail,
@@ -34,6 +38,7 @@ import {
   NewsletterItem,
   Sponsor,
   SocialPost,
+  SocialConnection,
   EmailMessage,
   EmailFolder,
   RevenuePoint,
@@ -47,6 +52,7 @@ export const queryKeys = {
   newsletters: ["newsletters"] as const,
   sponsors: ["sponsors"] as const,
   socialPosts: ["social-posts"] as const,
+  socialConnections: ["social-connections"] as const,
   emails: ["emails"] as const,
   revenue: ["analytics", "revenue"] as const,
   traffic: ["analytics", "traffic"] as const,
@@ -143,6 +149,38 @@ export function useDeleteSocialPost() {
   return useMutation({
     mutationFn: deleteSocialPost,
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.socialPosts }),
+  });
+}
+
+export function useSocialConnections(): UseQueryResult<SocialConnection[]> {
+  return useQuery({
+    queryKey: queryKeys.socialConnections,
+    queryFn: getSocialConnections,
+  });
+}
+
+export function useAddSocialConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: addSocialConnection,
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.socialConnections }),
+  });
+}
+
+export function useUpdateSocialConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<SocialConnection> }) =>
+      updateSocialConnection(id, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.socialConnections }),
+  });
+}
+
+export function useDeleteSocialConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: deleteSocialConnection,
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.socialConnections }),
   });
 }
 

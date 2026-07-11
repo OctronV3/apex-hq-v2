@@ -31,9 +31,14 @@ import {
 
 const platformColor: Record<SocialPlatform, string> = {
   twitter: "bg-sky-500/10 text-sky-500 border-sky-500/20",
+  x: "bg-white/10 text-white border-white/20",
   linkedin: "bg-blue-500/10 text-blue-500 border-blue-500/20",
   instagram: "bg-pink-500/10 text-pink-500 border-pink-500/20",
   threads: "bg-white/10 text-white border-white/20",
+  facebook: "bg-blue-400/10 text-blue-400 border-blue-400/20",
+  youtube: "bg-red-500/10 text-red-500 border-red-500/20",
+  tiktok: "bg-white/10 text-white border-white/20",
+  bluesky: "bg-sky-400/10 text-sky-400 border-sky-400/20",
 };
 
 function PostCard({
@@ -144,7 +149,7 @@ function AddPostDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border-[#222222] bg-[#0a0a0a] text-white">
-                  {["twitter", "linkedin", "instagram", "threads"].map((p) => (
+                  {["twitter", "x", "linkedin", "instagram", "threads", "facebook", "youtube", "tiktok", "bluesky"].map((p) => (
                     <SelectItem key={p} value={p} className="text-white">
                       {p}
                     </SelectItem>

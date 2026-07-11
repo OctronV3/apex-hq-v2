@@ -36,7 +36,16 @@ export interface Sponsor {
   logo?: string;
 }
 
-export type SocialPlatform = "twitter" | "linkedin" | "instagram" | "threads";
+export type SocialPlatform =
+  | "twitter"
+  | "x"
+  | "linkedin"
+  | "instagram"
+  | "threads"
+  | "facebook"
+  | "youtube"
+  | "tiktok"
+  | "bluesky";
 export type SocialStatus = "draft" | "scheduled" | "published";
 
 export interface SocialPost {
@@ -46,12 +55,46 @@ export interface SocialPost {
   scheduledAt?: string;
   publishedAt?: string;
   status: SocialStatus;
+  connectionId?: string;
   metrics?: {
     likes: number;
     shares: number;
     comments: number;
     impressions: number;
   };
+}
+
+export interface SocialConnection {
+  id: string;
+  workspaceId: string;
+  userId?: string;
+  platform: SocialPlatform;
+  accountName?: string;
+  accountHandle?: string;
+  externalId?: string;
+  profileUrl?: string;
+  connectionMethod: "api" | "webview";
+  status: "pending" | "connected" | "error" | "disconnected";
+  metrics?: {
+    followers?: number;
+    reach?: number;
+    views?: number;
+    engagement?: number;
+  };
+  recentPosts?: {
+    id: string;
+    content: string;
+    publishedAt: string;
+    likes: number;
+    comments: number;
+    shares: number;
+    views: number;
+  }[];
+  profile?: Record<string, unknown>;
+  connectedAt?: string;
+  disconnectedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type EmailFolder = "inbox" | "sent" | "draft" | "trash";

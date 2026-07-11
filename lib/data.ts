@@ -7,6 +7,7 @@ import {
   NewsletterItem,
   Sponsor,
   SocialPost,
+  SocialConnection,
   EmailMessage,
   EmailFolder,
   RevenuePoint,
@@ -666,4 +667,98 @@ export async function getCalendarEvents(): Promise<CalendarEvent[]> {
 
   const { events } = await fetchJson<{ events: CalendarEvent[] }>("/calendar");
   return events;
+}
+
+// ---- Social Connections ----
+
+export async function getSocialConnections(): Promise<SocialConnection[]> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    const { data, error } = await supabase
+      .from("social_connections")
+      .select("id, workspace_id, user_id, platform, account_name, account_handle, external_id, profile_url, connection_method, status, metrics, recent_posts, profile, connected_at, disconnected_at, created_at, updated_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => toCamel<SocialConnection>(row));
+  }
+
+  const { data } = await fetchJson<{ data: Record<string, unknown>[] }>(
+    "/social-connections"
+  );
+  return data.map((row) => toCamel<SocialConnection>(row));
+}
+
+export async function addSocialConnection(
+  connection: Omit<SocialConnection, "id" | "createdAt" | "updatedAt" | "workspaceId" | "userId">
+): Promise<SocialConnection> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not available");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const { data: user } = await supabase.auth.getUser();
+    const payload = toSnake({ ...connection, workspaceId, userId: user.user?.id });
+    const { data, error } = await supabase
+      .from("social_connections")
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<SocialConnection>(data);
+  }
+
+  const { data } = await fetchJson<{ data: Record<string, unknown> }>("/social-connections", {
+    method: "POST",
+    body: JSON.stringify(connection),
+  });
+  return toCamel<SocialConnection>(data);
+}
+
+export async function updateSocialConnection(
+  id: string,
+  patch: Partial<SocialConnection>
+): Promise<SocialConnection> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not available");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const { data, error } = await supabase
+      .from("social_connections")
+      .update(toSnake(patch as Record<string, unknown>))
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<SocialConnection>(data);
+  }
+
+  const { data } = await fetchJson<{ data: Record<string, unknown> }>(`/social-connections/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return toCamel<SocialConnection>(data);
+}
+
+export async function deleteSocialConnection(id: string): Promise<void> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return;
+    const { error } = await supabase
+      .from("social_connections")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  await fetchJson(`/social-connections/${id}`, { method: "DELETE" });
 }
