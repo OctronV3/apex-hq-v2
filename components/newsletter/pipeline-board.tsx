@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Send, Calendar, PenTool, Lightbulb } from "lucide-react";
+import { Plus, Send, Calendar, PenTool, Lightbulb, Search, FileEdit, Eye, Image, Archive } from "lucide-react";
 import {
   useNewsletters,
   useUpdateNewsletter,
@@ -30,21 +30,35 @@ import { Label } from "@/components/ui/label";
 
 const stages: { key: PipelineStage; label: string; icon: typeof Lightbulb }[] = [
   { key: "idea", label: "Idea", icon: Lightbulb },
+  { key: "research", label: "Research", icon: Search },
   { key: "writing", label: "Writing", icon: PenTool },
+  { key: "editing", label: "Editing", icon: FileEdit },
+  { key: "review", label: "Review", icon: Eye },
+  { key: "graphics", label: "Graphics", icon: Image },
   { key: "scheduled", label: "Scheduled", icon: Calendar },
-  { key: "sent", label: "Sent", icon: Send },
+  { key: "published", label: "Published", icon: Send },
+  { key: "archived", label: "Archived", icon: Archive },
 ];
 
 function stageColor(stage: PipelineStage) {
   switch (stage) {
     case "idea":
+    case "research":
       return "bg-[#111111] text-[#888888] border-[#222222]";
     case "writing":
+    case "editing":
       return "bg-[#111111] text-white border-[#222222]";
+    case "review":
     case "scheduled":
       return "bg-[#ff1a1a]/10 text-[#ff1a1a] border-[#ff1a1a]/20";
-    case "sent":
+    case "graphics":
+      return "bg-[#111111] text-white border-[#222222]";
+    case "published":
       return "bg-white/10 text-white border-white/20";
+    case "archived":
+      return "bg-[#050505] text-[#888888] border-[#222222]";
+    default:
+      return "bg-[#111111] text-[#888888] border-[#222222]";
   }
 }
 
@@ -53,6 +67,15 @@ function AddNewsletterDialog({ open, setOpen }: { open: boolean; setOpen: (v: bo
   const [author, setAuthor] = useState("");
   const [stage, setStage] = useState<PipelineStage>("idea");
   const add = useAddNewsletter();
+
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      setTitle("");
+      setAuthor("");
+      setStage("idea");
+    }
+    setOpen(next);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +86,7 @@ function AddNewsletterDialog({ open, setOpen }: { open: boolean; setOpen: (v: bo
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="border-[#222222] bg-[#0a0a0a] text-white">
         <DialogHeader>
           <DialogTitle>New Newsletter Item</DialogTitle>
@@ -146,7 +169,7 @@ function PipelineCard({ item }: { item: NewsletterItem }) {
           </SelectContent>
         </Select>
       </div>
-      {item.stage === "sent" && (
+      {item.stage === "published" && (
         <div className="flex gap-3 text-xs text-[#888888]">
           <span>{item.openRate}% open</span>
           <span>{item.clickRate}% click</span>
@@ -207,7 +230,7 @@ export function PipelineBoard() {
           <Plus className="mr-2 h-4 w-4" /> New item
         </Button>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {stages.map((stage) => (
           <PipelineColumn
             key={stage.key}

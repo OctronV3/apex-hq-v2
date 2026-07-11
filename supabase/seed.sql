@@ -66,9 +66,9 @@ BEGIN
   VALUES
     (demo_workspace_id, 'Market Pulse: July 2026', 'B. Wayne', 'writing', NULL, NULL, NULL, NULL, ARRAY['markets','weekly'], demo_user_id),
     (demo_workspace_id, 'The Operator''s Playbook #12', 'A. Fox', 'scheduled', NOW() + INTERVAL '1 day', NULL, NULL, NULL, ARRAY['ops','playbook'], demo_user_id),
-    (demo_workspace_id, 'Sponsor Spotlight: Gotham Tools', 'B. Wayne', 'sent', NULL, NOW() - INTERVAL '2 days', 62, 14, ARRAY['sponsor'], demo_user_id),
+    (demo_workspace_id, 'Sponsor Spotlight: Gotham Tools', 'B. Wayne', 'published', NULL, NOW() - INTERVAL '2 days', 62, 14, ARRAY['sponsor'], demo_user_id),
     (demo_workspace_id, 'Deep Dive: Newsletter Growth Loops', 'L. Cain', 'idea', NULL, NULL, NULL, NULL, ARRAY['growth','strategy'], demo_user_id),
-    (demo_workspace_id, 'Community Digest #45', 'B. Wayne', 'sent', NULL, NOW() - INTERVAL '7 days', 55, 9, ARRAY['community'], demo_user_id);
+    (demo_workspace_id, 'Community Digest #45', 'B. Wayne', 'published', NULL, NOW() - INTERVAL '7 days', 55, 9, ARRAY['community'], demo_user_id);
 
   -- Sponsors
   INSERT INTO public.sponsors (workspace_id, name, tier, deal_value, status, start_date, end_date, contact, created_by)

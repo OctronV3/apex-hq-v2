@@ -1,13 +1,21 @@
 import {
   differenceInCalendarMonths,
   endOfMonth,
+  endOfYear,
   format,
   isWithinInterval,
   parseISO,
   startOfMonth,
+  startOfYear,
   subMonths,
 } from "date-fns";
 import type { KpiStats, NewsletterItem, RevenuePoint, Sponsor } from "@/types";
+
+export interface RevenueTimeSeriesOptions {
+  from?: Date;
+  to?: Date;
+  granularity?: "monthly" | "yearly";
+}
 
 function getSponsorMonthlyShare(sponsor: Sponsor): number {
   const dealValue = sponsor.dealValue || 0;
@@ -48,6 +56,16 @@ function isSponsorCurrentlyActive(sponsor: Sponsor, month: Date): boolean {
   return isSponsorActiveInMonth(sponsor, month);
 }
 
+function sponsorRevenueForMonth(sponsors: Sponsor[], month: Date): number {
+  return sponsors
+    .filter((s) => isSponsorRevenueActiveInMonth(s, month))
+    .reduce((sum, s) => sum + getSponsorMonthlyShare(s), 0);
+}
+
+function activeSponsorCountForMonth(sponsors: Sponsor[], month: Date): number {
+  return sponsors.filter((s) => isSponsorCurrentlyActive(s, month)).length;
+}
+
 function newsletterRateForMonth(
   newsletters: NewsletterItem[],
   month: Date,
@@ -58,7 +76,7 @@ function newsletterRateForMonth(
   const rates = newsletters
     .filter(
       (n) =>
-        n.stage === "sent" &&
+        n.stage === "published" &&
         n.sentAt &&
         isWithinInterval(parseISO(n.sentAt), { start, end }) &&
         n[key] != null
@@ -69,25 +87,69 @@ function newsletterRateForMonth(
   return Math.round(rates.reduce((a, b) => a + b, 0) / rates.length);
 }
 
-function activeSponsorCountForMonth(sponsors: Sponsor[], month: Date): number {
-  return sponsors.filter((s) => isSponsorCurrentlyActive(s, month)).length;
+function getEarliestSponsorStart(sponsors: Sponsor[]): Date | undefined {
+  const dates = sponsors
+    .map((s) => (s.startDate ? parseISO(s.startDate) : undefined))
+    .filter((d): d is Date => !!d && !isNaN(d.getTime()));
+  if (!dates.length) return undefined;
+  return dates.reduce((earliest, d) => (d < earliest ? d : earliest));
 }
 
-function sponsorRevenueForMonth(sponsors: Sponsor[], month: Date): number {
-  return sponsors
-    .filter((s) => isSponsorRevenueActiveInMonth(s, month))
-    .reduce((sum, s) => sum + getSponsorMonthlyShare(s), 0);
+function generateMonthlyInterval(from: Date, to: Date): Date[] {
+  const months: Date[] = [];
+  let current = startOfMonth(from);
+  const end = startOfMonth(to);
+  while (current <= end) {
+    months.push(current);
+    current = startOfMonth(subMonths(current, -1));
+  }
+  return months;
+}
+
+function generateYearlyInterval(from: Date, to: Date): Date[] {
+  const years: Date[] = [];
+  let current = startOfYear(from);
+  const end = startOfYear(to);
+  while (current <= end) {
+    years.push(current);
+    current = startOfYear(subMonths(current, -12));
+  }
+  return years;
 }
 
 export function computeRevenueTimeSeries(
   sponsors: Sponsor[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: RevenueTimeSeriesOptions = {}
 ): RevenuePoint[] {
-  const months: Date[] = [];
-  for (let i = 11; i >= 0; i--) {
-    months.push(startOfMonth(subMonths(now, i)));
+  const granularity = options.granularity || "monthly";
+  const defaultFrom = getEarliestSponsorStart(sponsors) || startOfMonth(now);
+  const from = startOfMonth(options.from || defaultFrom);
+  const to = granularity === "yearly" ? startOfYear(options.to || now) : startOfMonth(options.to || now);
+
+  if (from > to) return [];
+
+  if (granularity === "yearly") {
+    const years = generateYearlyInterval(from, to);
+    return years.map((year) => {
+      const yearStart = startOfYear(year);
+      const yearEnd = endOfYear(year);
+      const months = generateMonthlyInterval(yearStart, yearEnd);
+      const sponsorsRevenue = months.reduce(
+        (sum, month) => sum + sponsorRevenueForMonth(sponsors, month),
+        0
+      );
+      return {
+        date: format(year, "yyyy"),
+        revenue: sponsorsRevenue,
+        subscriptions: 0,
+        ads: 0,
+        sponsors: sponsorsRevenue,
+      };
+    });
   }
 
+  const months = generateMonthlyInterval(from, to);
   return months.map((month) => {
     const sponsorsRevenue = sponsorRevenueForMonth(sponsors, month);
     return {

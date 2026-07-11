@@ -1,4 +1,13 @@
-export type PipelineStage = "idea" | "writing" | "scheduled" | "sent";
+export type PipelineStage =
+  | "idea"
+  | "research"
+  | "writing"
+  | "editing"
+  | "review"
+  | "graphics"
+  | "scheduled"
+  | "published"
+  | "archived";
 
 export interface NewsletterItem {
   id: string;

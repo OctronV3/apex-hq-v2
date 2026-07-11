@@ -174,10 +174,12 @@ export function useDeleteEmail() {
 }
 
 // Analytics
-export function useRevenue() {
+export function useRevenue(
+  params: { from?: string; to?: string; granularity?: string } = {}
+) {
   return useQuery<RevenuePoint[]>({
-    queryKey: queryKeys.revenue,
-    queryFn: getRevenueData,
+    queryKey: [...queryKeys.revenue, params],
+    queryFn: () => getRevenueData(params),
   });
 }
 

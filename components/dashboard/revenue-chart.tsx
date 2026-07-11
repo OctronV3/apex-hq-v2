@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useRevenue } from "@/hooks/use-apex";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { format, subMonths } from "date-fns";
 
 function formatCurrency(value: number) {
   return `$${(value / 1000).toFixed(0)}k`;
@@ -33,7 +34,8 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
 }
 
 export function RevenueChart() {
-  const { data, isLoading } = useRevenue();
+  const from = format(subMonths(new Date(), 11), "yyyy-MM-dd");
+  const { data, isLoading } = useRevenue({ from });
 
   if (isLoading) {
     return (

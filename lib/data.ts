@@ -1,4 +1,5 @@
 import { computeKpiStats, computeRevenueTimeSeries } from "./analytics";
+import { parseISO } from "date-fns";
 import { getSupabase } from "./supabase/client";
 import { isTauri } from "./env";
 import {
@@ -477,14 +478,25 @@ export async function deleteEmail(id: string): Promise<void> {
 
 // ---- Analytics ----
 
-export async function getRevenueData(): Promise<RevenuePoint[]> {
+export async function getRevenueData(
+  params: { from?: string; to?: string; granularity?: string } = {}
+): Promise<RevenuePoint[]> {
   if (isTauri()) {
     const sponsors = await getSponsors();
-    return computeRevenueTimeSeries(sponsors);
+    return computeRevenueTimeSeries(sponsors, new Date(), {
+      from: params.from ? parseISO(params.from) : undefined,
+      to: params.to ? parseISO(params.to) : undefined,
+      granularity: params.granularity === "yearly" ? "yearly" : "monthly",
+    });
   }
 
+  const search = new URLSearchParams({ kind: "revenue" });
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  if (params.granularity) search.set("granularity", params.granularity);
+
   const { data } = await fetchJson<{ data: RevenuePoint[] }>(
-    "/analytics?kind=revenue"
+    `/analytics?${search.toString()}`
   );
   return data;
 }

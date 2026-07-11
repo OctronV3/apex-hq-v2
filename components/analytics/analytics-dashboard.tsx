@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   AreaChart,
   Area,
@@ -23,6 +24,15 @@ import {
 } from "@/hooks/use-apex";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { format, subMonths, startOfYear } from "date-fns";
 
 function formatCurrency(value: number) {
   return `$${(value / 1000).toFixed(0)}k`;
@@ -83,15 +93,91 @@ function KpiCards() {
   );
 }
 
+type RangePreset = "all" | "12m" | "6m" | "ytd" | "yearly" | "custom";
+
 function RevenueTab() {
-  const { data } = useRevenue();
+  const [preset, setPreset] = useState<RangePreset>("all");
+  const [granularity, setGranularity] = useState<"monthly" | "yearly">("monthly");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const now = new Date();
+  const params: { from?: string; to?: string; granularity?: string } = { granularity };
+
+  if (preset === "12m") {
+    params.from = format(subMonths(now, 11), "yyyy-MM-dd");
+  } else if (preset === "6m") {
+    params.from = format(subMonths(now, 5), "yyyy-MM-dd");
+  } else if (preset === "ytd") {
+    params.from = format(startOfYear(now), "yyyy-MM-dd");
+  } else if (preset === "yearly") {
+    params.from = format(startOfYear(subMonths(now, 59)), "yyyy-MM-dd");
+    params.granularity = "yearly";
+  } else if (preset === "custom") {
+    if (customFrom) params.from = customFrom;
+    if (customTo) params.to = customTo;
+  }
+
+  const { data } = useRevenue(params);
 
   return (
     <div className="space-y-6">
       <KpiCards />
       <Card className="border-[#222222] bg-[#0a0a0a]">
         <CardHeader>
-          <CardTitle className="text-white text-base">Revenue by Source</CardTitle>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-white text-base">Revenue by Source</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={preset} onValueChange={(v) => {
+                const next = v as RangePreset;
+                setPreset(next);
+                if (next === "yearly") {
+                  setGranularity("yearly");
+                } else if (granularity === "yearly" && next !== "custom") {
+                  setGranularity("monthly");
+                }
+              }}>
+                <SelectTrigger className="h-8 w-36 bg-[#111111] border-[#222222] text-white text-xs">
+                  <SelectValue placeholder="Range" />
+                </SelectTrigger>
+                <SelectContent className="border-[#222222] bg-[#0a0a0a] text-white">
+                  <SelectItem value="all" className="text-white">All</SelectItem>
+                  <SelectItem value="12m" className="text-white">Last 12 months</SelectItem>
+                  <SelectItem value="6m" className="text-white">Last 6 months</SelectItem>
+                  <SelectItem value="ytd" className="text-white">Year to date</SelectItem>
+                  <SelectItem value="yearly" className="text-white">Yearly</SelectItem>
+                  <SelectItem value="custom" className="text-white">Custom</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={granularity} onValueChange={(v) => setGranularity(v as "monthly" | "yearly")}>
+                <SelectTrigger className="h-8 w-28 bg-[#111111] border-[#222222] text-white text-xs">
+                  <SelectValue placeholder="Granularity" />
+                </SelectTrigger>
+                <SelectContent className="border-[#222222] bg-[#0a0a0a] text-white">
+                  <SelectItem value="monthly" className="text-white">Monthly</SelectItem>
+                  <SelectItem value="yearly" className="text-white">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+              {preset === "custom" && (
+                <>
+                  <Input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="h-8 w-36 bg-[#111111] border-[#222222] text-white text-xs"
+                    placeholder="From"
+                  />
+                  <Input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="h-8 w-36 bg-[#111111] border-[#222222] text-white text-xs"
+                    placeholder="To"
+                  />
+                </>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="h-80">

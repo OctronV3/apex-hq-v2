@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceId } from "@/lib/api-helpers";
 import { computeKpiStats, computeRevenueTimeSeries } from "@/lib/analytics";
@@ -37,7 +38,15 @@ export async function GET(request: NextRequest) {
       contact: row.contact,
     })) satisfies Sponsor[];
 
-    const data = computeRevenueTimeSeries(mappedSponsors);
+    const from = request.nextUrl.searchParams.get("from");
+    const to = request.nextUrl.searchParams.get("to");
+    const granularity = request.nextUrl.searchParams.get("granularity");
+
+    const data = computeRevenueTimeSeries(mappedSponsors, new Date(), {
+      from: from ? parseISO(from) : undefined,
+      to: to ? parseISO(to) : undefined,
+      granularity: granularity === "yearly" ? "yearly" : "monthly",
+    });
     return NextResponse.json({ data });
   }
 
