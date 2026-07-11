@@ -2,61 +2,56 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import { useAuth } from "@/lib/auth-context";
-import { isClerkConfigured } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const ClerkSignUp = isClerkConfigured
-  ? dynamic(
-      () => import("@clerk/react").then((mod) => ({ default: mod.SignUp })),
-      { ssr: false }
-    )
-  : null;
-
-function FallbackSignUp() {
-  const [name, setName] = useState("");
-  const { signInWithDemo } = useAuth();
-  const router = useRouter();
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    signInWithDemo(name);
-    router.push("/");
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="callsign">Callsign</Label>
-        <Input
-          id="callsign"
-          placeholder="Bruce Wayne"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="bg-[#111111] border-[#222222] text-white placeholder:text-[#555555]"
-        />
-      </div>
-      <Button type="submit" className="w-full bg-[#ff1a1a] hover:bg-[#d60a0a] text-white">
-        Create account
-      </Button>
-    </form>
-  );
-}
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export function SignUpCard() {
-  if (isClerkConfigured && ClerkSignUp) {
-    return (
-      <ClerkSignUp
-        path="/sign-up"
-        routing="path"
-        signInUrl="/sign-in"
-        fallbackRedirectUrl="/"
-      />
-    );
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      setLoading(false);
+      return;
+    }
+
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName || email,
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -64,11 +59,53 @@ export function SignUpCard() {
       <CardHeader>
         <CardTitle className="text-white text-xl">Join Apex HQ</CardTitle>
         <CardDescription className="text-[#888888]">
-          Demo sign-up. Enter your callsign to get started.
+          Create your account and claim a workspace.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <FallbackSignUp />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <p className="text-sm text-[#ff1a1a]">{error}</p>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              placeholder="Bruce Wayne"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="bg-[#111111] border-[#222222] text-white placeholder:text-[#555555]"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="bruce@apex.hq"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="bg-[#111111] border-[#222222] text-white placeholder:text-[#555555]"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="bg-[#111111] border-[#222222] text-white placeholder:text-[#555555]"
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#ff1a1a] hover:bg-[#d60a0a] text-white"
+          >
+            {loading ? "Creating account..." : "Create account"}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

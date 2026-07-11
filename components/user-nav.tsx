@@ -1,9 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { isClerkConfigured } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,14 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const ClerkUserButton = isClerkConfigured
-  ? dynamic(
-      () => import("@clerk/react").then((mod) => ({ default: mod.UserButton })),
-      { ssr: false }
-    )
-  : null;
-
-function UserButtonFallback() {
+export function UserNav() {
   const { user, signOut, signIn } = useAuth();
 
   if (!user) {
@@ -65,24 +56,4 @@ function UserButtonFallback() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-export function UserNav() {
-  if (isClerkConfigured && ClerkUserButton) {
-    return (
-      <ClerkUserButton
-        appearance={{
-          elements: {
-            userButtonAvatarBox: "h-9 w-9 border border-[#222222]",
-            userButtonPopoverCard: "bg-[#0a0a0a] border-[#222222] text-white",
-            userButtonPopoverActionButton:
-              "hover:bg-[#111111] text-white",
-            userButtonPopoverFooter: "hidden",
-          },
-        }}
-      />
-    );
-  }
-
-  return <UserButtonFallback />;
 }

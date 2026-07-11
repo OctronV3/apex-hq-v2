@@ -1,10 +1,12 @@
 import type { NextConfig } from "next";
 
+const isTauri = process.env.TAURI_BUILD === "1";
+
 const nextConfig: NextConfig = {
-  output: "export",
-  distDir: "dist",
+  output: isTauri ? "export" : undefined,
+  distDir: isTauri ? "dist" : ".next",
   images: {
-    unoptimized: true,
+    unoptimized: isTauri,
   },
 };
 

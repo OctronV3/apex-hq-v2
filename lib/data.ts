@@ -1,4 +1,5 @@
 import { getSupabase } from "./supabase/client";
+import { isTauri } from "./env";
 import {
   NewsletterItem,
   Sponsor,
@@ -10,377 +11,591 @@ import {
   SocialMetric,
 } from "@/types";
 
-function id() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
+const API_BASE = "/api";
+
+function getWorkspaceId(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|; )apex-workspace=([^;]+)/);
+  if (match) return match[1];
+  return localStorage.getItem("apex-workspace");
+}
+
+async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(err.error || `Request failed: ${res.status}`);
   }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return res.json() as Promise<T>;
+}
+
+function toCamel<T>(obj: Record<string, unknown>): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const camel = key.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase());
+    out[camel] = value;
+  }
+  return out as T;
+}
+
+function toSnake(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const snake = key.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`);
+    out[snake] = value;
+  }
+  return out;
+}
+
+function toEmail(row: Record<string, unknown>): EmailMessage {
+  return {
+    id: row.id as string,
+    from: row.from_address as string,
+    to: row.to_address as string,
+    subject: row.subject as string,
+    body: row.body as string,
+    sentAt: row.sent_at as string,
+    folder: row.folder as EmailFolder,
+    read: row.read as boolean,
+    starred: row.starred as boolean,
+    labels: row.labels as string[],
+  };
+}
+
+function fromEmail(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === "from") {
+      out["from_address"] = value;
+    } else if (key === "to") {
+      out["to_address"] = value;
+    } else {
+      out[key.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`)] = value;
+    }
+  }
+  return out;
 }
 
 // ---- Newsletter ----
 
-let newsletters: NewsletterItem[] = [
-  {
-    id: id(),
-    title: "Market Pulse: July 2026",
-    author: "B. Wayne",
-    stage: "writing",
-    tags: ["markets", "weekly"],
-  },
-  {
-    id: id(),
-    title: "The Operator's Playbook #12",
-    author: "A. Fox",
-    stage: "scheduled",
-    scheduledAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
-    tags: ["ops", "playbook"],
-  },
-  {
-    id: id(),
-    title: "Sponsor Spotlight: Gotham Tools",
-    author: "B. Wayne",
-    stage: "sent",
-    sentAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    openRate: 62,
-    clickRate: 14,
-    tags: ["sponsor"],
-  },
-  {
-    id: id(),
-    title: "Deep Dive: Newsletter Growth Loops",
-    author: "L. Cain",
-    stage: "idea",
-    tags: ["growth", "strategy"],
-  },
-  {
-    id: id(),
-    title: "Community Digest #45",
-    author: "B. Wayne",
-    stage: "sent",
-    sentAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-    openRate: 55,
-    clickRate: 9,
-    tags: ["community"],
-  },
-];
-
 export async function getNewsletters(): Promise<NewsletterItem[]> {
-  const supabase = getSupabase();
-  if (supabase) {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
     const { data, error } = await supabase
       .from("newsletters")
       .select("*")
+      .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
-    if (!error && data) return data as NewsletterItem[];
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => toCamel<NewsletterItem>(row));
   }
-  return newsletters;
+
+  const { newsletters } = await fetchJson<{ newsletters: Record<string, unknown>[] }>(
+    "/newsletters"
+  );
+  return newsletters.map((row) => toCamel<NewsletterItem>(row));
 }
 
 export async function addNewsletter(
   item: Omit<NewsletterItem, "id">
 ): Promise<NewsletterItem> {
-  const newItem: NewsletterItem = { ...item, id: id() };
-  newsletters = [newItem, ...newsletters];
-  return newItem;
+  const payload = toSnake(item as Record<string, unknown>);
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not configured");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const { data: user } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("newsletters")
+      .insert({ ...payload, workspace_id: workspaceId, created_by: user.user?.id })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<NewsletterItem>(data);
+  }
+
+  const { newsletter } = await fetchJson<{ newsletter: Record<string, unknown> }>(
+    "/newsletters",
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+  return toCamel<NewsletterItem>(newsletter);
 }
 
 export async function updateNewsletter(
   id: string,
   patch: Partial<NewsletterItem>
 ): Promise<NewsletterItem | null> {
-  const idx = newsletters.findIndex((n) => n.id === id);
-  if (idx === -1) return null;
-  newsletters[idx] = { ...newsletters[idx], ...patch };
-  return newsletters[idx];
+  const payload = toSnake(patch as Record<string, unknown>);
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return null;
+    const { data, error } = await supabase
+      .from("newsletters")
+      .update(payload)
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<NewsletterItem>(data);
+  }
+
+  const { newsletter } = await fetchJson<{ newsletter: Record<string, unknown> }>(
+    `/newsletters/${id}`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+  return toCamel<NewsletterItem>(newsletter);
 }
 
 export async function deleteNewsletter(id: string): Promise<void> {
-  newsletters = newsletters.filter((n) => n.id !== id);
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return;
+    const { error } = await supabase
+      .from("newsletters")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  await fetchJson(`/newsletters/${id}`, { method: "DELETE" });
 }
 
 // ---- Sponsors ----
 
-let sponsors: Sponsor[] = [
-  {
-    id: id(),
-    name: "Gotham Tools",
-    tier: "platinum",
-    dealValue: 50000,
-    status: "active",
-    startDate: "2026-01-15",
-    endDate: "2026-12-31",
-    contact: "lucius.fox@gotham.tools",
-  },
-  {
-    id: id(),
-    name: "Wayne Enterprises",
-    tier: "gold",
-    dealValue: 25000,
-    status: "active",
-    startDate: "2026-03-01",
-    endDate: "2026-08-31",
-    contact: "bruce@wayne.com",
-  },
-  {
-    id: id(),
-    name: "Arkham Analytics",
-    tier: "silver",
-    dealValue: 12000,
-    status: "negotiating",
-    startDate: "2026-07-01",
-    contact: "sales@arkham.io",
-  },
-  {
-    id: id(),
-    name: "Ace Chemicals",
-    tier: "bronze",
-    dealValue: 4000,
-    status: "expired",
-    startDate: "2025-06-01",
-    endDate: "2026-05-31",
-    contact: "contact@acechem.com",
-  },
-];
-
 export async function getSponsors(): Promise<Sponsor[]> {
-  const supabase = getSupabase();
-  if (supabase) {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
     const { data, error } = await supabase
       .from("sponsors")
       .select("*")
+      .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
-    if (!error && data) return data as Sponsor[];
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => toCamel<Sponsor>(row));
   }
-  return sponsors;
+
+  const { sponsors } = await fetchJson<{ sponsors: Record<string, unknown>[] }>(
+    "/sponsors"
+  );
+  return sponsors.map((row) => toCamel<Sponsor>(row));
 }
 
-export async function addSponsor(
-  item: Omit<Sponsor, "id">
-): Promise<Sponsor> {
-  const newItem: Sponsor = { ...item, id: id() };
-  sponsors = [newItem, ...sponsors];
-  return newItem;
+export async function addSponsor(item: Omit<Sponsor, "id">): Promise<Sponsor> {
+  const payload = toSnake(item as Record<string, unknown>);
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not configured");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const { data: user } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("sponsors")
+      .insert({ ...payload, workspace_id: workspaceId, created_by: user.user?.id })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<Sponsor>(data);
+  }
+
+  const { sponsor } = await fetchJson<{ sponsor: Record<string, unknown> }>(
+    "/sponsors",
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+  return toCamel<Sponsor>(sponsor);
 }
 
 export async function updateSponsor(
   id: string,
   patch: Partial<Sponsor>
 ): Promise<Sponsor | null> {
-  const idx = sponsors.findIndex((s) => s.id === id);
-  if (idx === -1) return null;
-  sponsors[idx] = { ...sponsors[idx], ...patch };
-  return sponsors[idx];
+  const payload = toSnake(patch as Record<string, unknown>);
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return null;
+    const { data, error } = await supabase
+      .from("sponsors")
+      .update(payload)
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<Sponsor>(data);
+  }
+
+  const { sponsor } = await fetchJson<{ sponsor: Record<string, unknown> }>(
+    `/sponsors/${id}`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+  return toCamel<Sponsor>(sponsor);
 }
 
 export async function deleteSponsor(id: string): Promise<void> {
-  sponsors = sponsors.filter((s) => s.id !== id);
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return;
+    const { error } = await supabase
+      .from("sponsors")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  await fetchJson(`/sponsors/${id}`, { method: "DELETE" });
 }
 
 // ---- Social ----
 
-let socialPosts: SocialPost[] = [
-  {
-    id: id(),
-    platform: "twitter",
-    content:
-      "The bat-signal is on. New operator playbook drops tomorrow at 0600.",
-    scheduledAt: new Date(Date.now() + 1000 * 60 * 60 * 4).toISOString(),
-    status: "scheduled",
-  },
-  {
-    id: id(),
-    platform: "linkedin",
-    content:
-      "Revenue is a lagging metric. Operating tempo is the leading one. Here's how we run the batcave.",
-    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-    status: "published",
-    metrics: { likes: 432, shares: 89, comments: 34, impressions: 12000 },
-  },
-  {
-    id: id(),
-    platform: "threads",
-    content:
-      "Three decisions that made the July sponsor deck close 48 hours faster.",
-    status: "draft",
-  },
-];
-
 export async function getSocialPosts(): Promise<SocialPost[]> {
-  const supabase = getSupabase();
-  if (supabase) {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
     const { data, error } = await supabase
       .from("social_posts")
       .select("*")
+      .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false });
-    if (!error && data) return data as SocialPost[];
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => toCamel<SocialPost>(row));
   }
-  return socialPosts;
+
+  const { socialPosts } = await fetchJson<{ socialPosts: Record<string, unknown>[] }>(
+    "/social-posts"
+  );
+  return socialPosts.map((row) => toCamel<SocialPost>(row));
 }
 
 export async function addSocialPost(
   item: Omit<SocialPost, "id">
 ): Promise<SocialPost> {
-  const newItem: SocialPost = { ...item, id: id() };
-  socialPosts = [newItem, ...socialPosts];
-  return newItem;
+  const payload = toSnake(item as Record<string, unknown>);
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not configured");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const { data: user } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("social_posts")
+      .insert({ ...payload, workspace_id: workspaceId, created_by: user.user?.id })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<SocialPost>(data);
+  }
+
+  const { socialPost } = await fetchJson<{ socialPost: Record<string, unknown> }>(
+    "/social-posts",
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+  return toCamel<SocialPost>(socialPost);
 }
 
 export async function updateSocialPost(
   id: string,
   patch: Partial<SocialPost>
 ): Promise<SocialPost | null> {
-  const idx = socialPosts.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  socialPosts[idx] = { ...socialPosts[idx], ...patch };
-  return socialPosts[idx];
+  const payload = toSnake(patch as Record<string, unknown>);
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return null;
+    const { data, error } = await supabase
+      .from("social_posts")
+      .update(payload)
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<SocialPost>(data);
+  }
+
+  const { socialPost } = await fetchJson<{ socialPost: Record<string, unknown> }>(
+    `/social-posts/${id}`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+  return toCamel<SocialPost>(socialPost);
 }
 
 export async function deleteSocialPost(id: string): Promise<void> {
-  socialPosts = socialPosts.filter((p) => p.id !== id);
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return;
+    const { error } = await supabase
+      .from("social_posts")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  await fetchJson(`/social-posts/${id}`, { method: "DELETE" });
 }
 
 // ---- Email ----
 
-let emails: EmailMessage[] = [
-  {
-    id: id(),
-    from: "lucius.fox@wayne.com",
-    to: "bruce@apex.hq",
-    subject: "Q3 capex proposal",
-    body:
-      "Bruce —\n\nThe Q3 capex proposal is ready for review. Let me know if you want to adjust the tooling budget before we send it to the board.",
-    sentAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    folder: "inbox",
-    read: false,
-    starred: true,
-    labels: ["finance", "board"],
-  },
-  {
-    id: id(),
-    from: "sales@arkham.io",
-    to: "bruce@apex.hq",
-    subject: "Re: Sponsorship renewal",
-    body:
-      "Thanks for the quick response. We can lock in the silver tier by Friday if the invoice terms work.",
-    sentAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    folder: "inbox",
-    read: true,
-    starred: false,
-    labels: ["sponsors"],
-  },
-  {
-    id: id(),
-    from: "bruce@apex.hq",
-    to: "team@apex.hq",
-    subject: "Operator all-hands: Monday 0600",
-    body:
-      "Team —\n\nMonday kickoff will focus on newsletter cadence and sponsor deliverables. Come prepared.",
-    sentAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    folder: "sent",
-    read: true,
-    starred: false,
-    labels: ["internal"],
-  },
-];
-
 export async function getEmails(folder?: EmailFolder): Promise<EmailMessage[]> {
-  const supabase = getSupabase();
-  if (supabase) {
-    let query = supabase.from("emails").select("*").order("sent_at", {
-      ascending: false,
-    });
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    let query = supabase
+      .from("emails")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("sent_at", { ascending: false });
     if (folder) query = query.eq("folder", folder);
     const { data, error } = await query;
-    if (!error && data) return data as EmailMessage[];
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => toEmail(row));
   }
-  if (folder) return emails.filter((e) => e.folder === folder);
-  return emails;
+
+  const path = folder ? `/emails?folder=${folder}` : "/emails";
+  const { emails } = await fetchJson<{ emails: Record<string, unknown>[] }>(path);
+  return emails.map((row) => toEmail(row));
 }
 
 export async function sendEmail(
   email: Omit<EmailMessage, "id" | "folder" | "sentAt" | "read" | "starred" | "labels">
 ): Promise<EmailMessage> {
-  const newEmail: EmailMessage = {
-    ...email,
-    id: id(),
+  const payload = {
+    ...fromEmail(email as Record<string, unknown>),
     folder: "sent",
-    sentAt: new Date().toISOString(),
     read: true,
-    starred: false,
+    sent_at: new Date().toISOString(),
     labels: [],
   };
-  emails = [newEmail, ...emails];
-  return newEmail;
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not configured");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const { data: user } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("emails")
+      .insert({ ...payload, workspace_id: workspaceId, created_by: user.user?.id })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toEmail(data);
+  }
+
+  const { email: created } = await fetchJson<{ email: Record<string, unknown> }>(
+    "/emails",
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+  return toEmail(created);
 }
 
 export async function updateEmail(
   id: string,
   patch: Partial<EmailMessage>
 ): Promise<EmailMessage | null> {
-  const idx = emails.findIndex((e) => e.id === id);
-  if (idx === -1) return null;
-  emails[idx] = { ...emails[idx], ...patch };
-  return emails[idx];
+  const payload = fromEmail(patch as Record<string, unknown>);
+
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return null;
+    const { data, error } = await supabase
+      .from("emails")
+      .update(payload)
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toEmail(data);
+  }
+
+  const { email } = await fetchJson<{ email: Record<string, unknown> }>(
+    `/emails/${id}`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+  return toEmail(email);
 }
 
 export async function deleteEmail(id: string): Promise<void> {
-  emails = emails.filter((e) => e.id !== id);
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return;
+    const { error } = await supabase
+      .from("emails")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  await fetchJson(`/emails/${id}`, { method: "DELETE" });
 }
 
 // ---- Analytics ----
 
-export function getRevenueData(): RevenuePoint[] {
-  const data: RevenuePoint[] = [];
-  let revenue = 42000;
-  for (let i = 11; i >= 0; i--) {
-    const date = new Date();
-    date.setMonth(date.getMonth() - i);
-    revenue += Math.floor(Math.random() * 8000 - 2000);
-    data.push({
-      date: date.toLocaleString("default", { month: "short" }),
-      revenue,
-      subscriptions: Math.floor(revenue * 0.55),
-      ads: Math.floor(revenue * 0.25),
-      sponsors: Math.floor(revenue * 0.2),
-    });
+export async function getRevenueData(): Promise<RevenuePoint[]> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    const { data, error } = await supabase
+      .from("analytics_revenue")
+      .select("date, revenue, subscriptions, ads, sponsors")
+      .eq("workspace_id", workspaceId)
+      .order("date", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => ({
+      date: row.date,
+      revenue: row.revenue,
+      subscriptions: row.subscriptions,
+      ads: row.ads,
+      sponsors: row.sponsors,
+    }));
   }
+
+  const { data } = await fetchJson<{ data: RevenuePoint[] }>(
+    "/analytics?kind=revenue"
+  );
   return data;
 }
 
-export function getTrafficData(): TrafficPoint[] {
-  const data: TrafficPoint[] = [];
-  let visitors = 12000;
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    visitors += Math.floor(Math.random() * 2000 - 900);
-    data.push({
-      date: date.toLocaleString("default", { weekday: "narrow" }),
-      visitors,
-      pageViews: Math.floor(visitors * (2.4 + Math.random())),
-    });
+export async function getTrafficData(): Promise<TrafficPoint[]> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    const { data, error } = await supabase
+      .from("analytics_traffic")
+      .select("date, visitors, page_views")
+      .eq("workspace_id", workspaceId)
+      .order("date", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => ({
+      date: row.date,
+      visitors: row.visitors,
+      pageViews: row.page_views,
+    }));
   }
-  return data;
+
+  const { data } = await fetchJson<{ data: Record<string, unknown>[] }>(
+    "/analytics?kind=traffic"
+  );
+  return data.map((row) => ({
+    date: row.date as string,
+    visitors: row.visitors as number,
+    pageViews: row.page_views as number,
+  }));
 }
 
-export function getSocialMetrics(): SocialMetric[] {
-  return [
-    { platform: "Twitter", followers: 48200, growth: 4.2 },
-    { platform: "LinkedIn", followers: 21500, growth: 6.7 },
-    { platform: "Instagram", followers: 12800, growth: 2.1 },
-    { platform: "Threads", followers: 8400, growth: 8.4 },
-  ];
+export async function getSocialMetrics(): Promise<SocialMetric[]> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    const { data, error } = await supabase
+      .from("analytics_social")
+      .select("platform, followers, growth")
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => ({
+      platform: row.platform,
+      followers: row.followers,
+      growth: Number(row.growth),
+    }));
+  }
+
+  const { data } = await fetchJson<{ data: Record<string, unknown>[] }>(
+    "/analytics?kind=social"
+  );
+  return data.map((row) => ({
+    platform: row.platform as string,
+    followers: row.followers as number,
+    growth: Number(row.growth),
+  }));
 }
 
-export function getKpiStats() {
+export async function getKpiStats() {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return null;
+    const { data, error } = await supabase
+      .from("kpi_metrics")
+      .select(
+        "mrr, mrr_growth, subscribers, subscriber_growth, open_rate, open_rate_growth, total_sponsors, sponsor_growth"
+      )
+      .eq("workspace_id", workspaceId)
+      .single();
+    if (error) throw new Error(error.message);
+    return {
+      mrr: data.mrr,
+      mrrGrowth: Number(data.mrr_growth),
+      subscribers: data.subscribers,
+      subscriberGrowth: Number(data.subscriber_growth),
+      openRate: data.open_rate,
+      openRateGrowth: Number(data.open_rate_growth),
+      totalSponsors: data.total_sponsors,
+      sponsorGrowth: Number(data.sponsor_growth),
+    };
+  }
+
+  const { data } = await fetchJson<{ data: Record<string, unknown> }>(
+    "/analytics?kind=kpi"
+  );
   return {
-    mrr: 42400,
-    mrrGrowth: 12.5,
-    subscribers: 14200,
-    subscriberGrowth: 8.3,
-    openRate: 58,
-    openRateGrowth: 2.1,
-    totalSponsors: 14,
-    sponsorGrowth: 16,
+    mrr: data.mrr as number,
+    mrrGrowth: Number(data.mrr_growth),
+    subscribers: data.subscribers as number,
+    subscriberGrowth: Number(data.subscriber_growth),
+    openRate: data.open_rate as number,
+    openRateGrowth: Number(data.open_rate_growth),
+    totalSponsors: data.total_sponsors as number,
+    sponsorGrowth: Number(data.sponsor_growth),
   };
 }

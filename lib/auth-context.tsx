@@ -15,16 +15,14 @@ export interface ApexAuthContextValue {
   user: ApexUser | null;
   signIn: () => void;
   signOut: () => void;
-  signInWithDemo: (name: string) => void;
 }
 
 export const ApexAuthContext = createContext<ApexAuthContextValue>({
-  isLoaded: true,
+  isLoaded: false,
   isSignedIn: false,
   user: null,
   signIn: () => {},
   signOut: () => {},
-  signInWithDemo: () => {},
 });
 
 export function useAuth() {

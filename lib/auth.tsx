@@ -1,80 +1,64 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
-import { ApexAuthContext, ApexUser } from "./auth-context";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
+import { getSupabase } from "@/lib/supabase/client";
+import { ApexAuthContext, ApexAuthContextValue, ApexUser } from "./auth-context";
 
-export const isClerkConfigured =
-  typeof process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY === "string" &&
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.startsWith("pk_");
+function buildUser(user: User | null): ApexUser | null {
+  if (!user) return null;
+  const meta = user.user_metadata || {};
+  return {
+    id: user.id,
+    name: meta.full_name || user.email || "Operator",
+    email: user.email || "",
+    imageUrl: meta.avatar_url || null,
+  };
+}
 
-const ClerkAuthProvider = isClerkConfigured
-  ? dynamic(() => import("./clerk-auth-provider").then((mod) => ({ default: mod.ClerkAuthProvider })), { ssr: false })
-  : null;
-
-function FallbackAuthProvider({ children }: { children: React.ReactNode }) {
+export function ApexAuthProvider({ children }: { children: React.ReactNode }) {
+  const supabase = getSupabase();
   const [state, setState] = useState<{
     isLoaded: boolean;
     user: ApexUser | null;
-  }>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("apex_user");
-      if (saved) {
-        try {
-          return { isLoaded: true, user: JSON.parse(saved) };
-        } catch {
-          // ignore
-        }
-      }
-    }
-    return { isLoaded: true, user: null };
-  });
+  }>({ isLoaded: !supabase, user: null });
+  const router = useRouter();
 
-  const { isLoaded, user } = state;
+  useEffect(() => {
+    if (!supabase) return;
 
-  const setUser = useCallback((user: ApexUser | null) => {
-    setState((prev) => ({ ...prev, user }));
-    if (typeof window !== "undefined") {
-      if (user) {
-        localStorage.setItem("apex_user", JSON.stringify(user));
-      } else {
-        localStorage.removeItem("apex_user");
-      }
-    }
-  }, []);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setState({ isLoaded: true, user: buildUser(session?.user ?? null) });
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setState({ isLoaded: true, user: buildUser(session?.user ?? null) });
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
 
   const signIn = useCallback(() => {
-    if (typeof window !== "undefined") {
-      window.location.href = "/sign-in";
-    }
-  }, []);
+    router.push("/sign-in");
+  }, [router]);
 
-  const signOut = useCallback(() => {
-    setUser(null);
-  }, [setUser]);
+  const signOut = useCallback(async () => {
+    await supabase?.auth.signOut();
+    router.push("/sign-in");
+  }, [supabase, router]);
 
-  const signInWithDemo = useCallback(
-    (name: string) => {
-      setUser({
-        id: "demo",
-        name: name || "Bruce Wayne",
-        email: "bruce@apex.hq",
-        imageUrl: null,
-      });
-    },
-    [setUser]
-  );
-
-  const value = useMemo(
+  const value = useMemo<ApexAuthContextValue>(
     () => ({
-      isLoaded,
-      isSignedIn: !!user,
-      user,
+      isLoaded: state.isLoaded,
+      isSignedIn: !!state.user,
+      user: state.user,
       signIn,
       signOut,
-      signInWithDemo,
     }),
-    [isLoaded, user, signIn, signOut, signInWithDemo]
+    [state, signIn, signOut]
   );
 
   return (
@@ -84,10 +68,4 @@ function FallbackAuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ApexAuthProvider({ children }: { children: React.ReactNode }) {
-  if (isClerkConfigured && ClerkAuthProvider) {
-    return <ClerkAuthProvider>{children}</ClerkAuthProvider>;
-  }
-
-  return <FallbackAuthProvider>{children}</FallbackAuthProvider>;
-}
+export const isClerkConfigured = false;

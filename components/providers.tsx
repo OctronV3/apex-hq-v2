@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { ApexAuthProvider } from "@/lib/auth";
+import { WorkspaceProvider } from "@/lib/workspace";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -28,18 +29,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <ApexAuthProvider>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider delay={80}>
-            {children}
-            <Toaster
-              position="bottom-right"
-              toastOptions={{
-                className:
-                  "bg-[#0a0a0a] border-[#222222] text-white",
-              }}
-            />
-          </TooltipProvider>
-        </QueryClientProvider>
+        <WorkspaceProvider>
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider delay={80}>
+              {children}
+              <Toaster
+                position="bottom-right"
+                toastOptions={{
+                  className:
+                    "bg-[#0a0a0a] border-[#222222] text-white",
+                }}
+              />
+            </TooltipProvider>
+          </QueryClientProvider>
+        </WorkspaceProvider>
       </ApexAuthProvider>
     </ThemeProvider>
   );

@@ -2,61 +2,50 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import { useAuth } from "@/lib/auth-context";
-import { isClerkConfigured } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const ClerkSignIn = isClerkConfigured
-  ? dynamic(
-      () => import("@clerk/react").then((mod) => ({ default: mod.SignIn })),
-      { ssr: false }
-    )
-  : null;
-
-function FallbackSignIn() {
-  const [name, setName] = useState("");
-  const { signInWithDemo } = useAuth();
-  const router = useRouter();
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    signInWithDemo(name);
-    router.push("/");
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="callsign">Callsign</Label>
-        <Input
-          id="callsign"
-          placeholder="Bruce Wayne"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="bg-[#111111] border-[#222222] text-white placeholder:text-[#555555]"
-        />
-      </div>
-      <Button type="submit" className="w-full bg-[#ff1a1a] hover:bg-[#d60a0a] text-white">
-        Enter the Batcave
-      </Button>
-    </form>
-  );
-}
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export function SignInCard() {
-  if (isClerkConfigured && ClerkSignIn) {
-    return (
-      <ClerkSignIn
-        path="/sign-in"
-        routing="path"
-        signUpUrl="/sign-up"
-        fallbackRedirectUrl="/"
-      />
-    );
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      setLoading(false);
+      return;
+    }
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      setError(signInError.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -64,11 +53,43 @@ export function SignInCard() {
       <CardHeader>
         <CardTitle className="text-white text-xl">Apex HQ</CardTitle>
         <CardDescription className="text-[#888888]">
-          Demo sign-in. Enter your callsign to access the dashboard.
+          Sign in to access the command center.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <FallbackSignIn />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <p className="text-sm text-[#ff1a1a]">{error}</p>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="bruce@apex.hq"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="bg-[#111111] border-[#222222] text-white placeholder:text-[#555555]"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="bg-[#111111] border-[#222222] text-white placeholder:text-[#555555]"
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#ff1a1a] hover:bg-[#d60a0a] text-white"
+          >
+            {loading ? "Signing in..." : "Enter the Batcave"}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );
