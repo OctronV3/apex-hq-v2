@@ -27,10 +27,6 @@ export async function createClient() {
     }
   );
 
-  // Ensure the session from cookies is loaded so PostgREST sends the
-  // Authorization header with the user's JWT.
-  await client.auth.getSession();
-
   return client;
 }
 
@@ -55,8 +51,6 @@ export async function createMiddlewareClient(
       },
     }
   );
-
-  await client.auth.getSession();
 
   return client;
 }

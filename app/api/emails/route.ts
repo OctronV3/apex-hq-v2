@@ -3,14 +3,19 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getWorkspaceId, auditLog } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-  const workspaceId = await getWorkspaceId(request);
-  if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
+  if (sessionError || !sessionData.session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspaceId = await getWorkspaceId(supabase, request);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace" }, { status: 400 });
+  }
 
   const folder = request.nextUrl.searchParams.get("folder") || "inbox";
-  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("emails")
@@ -25,14 +30,17 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
 
-  const workspaceId = await getWorkspaceId(request);
+  const [user, workspaceId] = await Promise.all([
+    getCurrentUser(supabase),
+    getWorkspaceId(supabase, request),
+  ]);
+
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
 
   const body = await request.json();
-  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("emails")
@@ -42,7 +50,7 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await auditLog(workspaceId, "INSERT", "emails", data.id, { subject: data.subject });
+  await auditLog(supabase, workspaceId, user.id, "INSERT", "emails", data.id, { subject: data.subject });
 
   return NextResponse.json({ email: data });
 }

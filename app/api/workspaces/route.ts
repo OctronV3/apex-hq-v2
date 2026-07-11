@@ -9,16 +9,15 @@ interface WorkspaceShape {
 
 export async function GET() {
   const supabase = await createClient();
-  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-  if (userError || !userData.user) {
+  if (sessionError || !sessionData.session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { data: memberships, error } = await supabase
     .from("workspace_members")
     .select("role, workspace:workspaces(id, slug, name)")
-    .eq("user_id", userData.user.id)
     .order("created_at", { ascending: true });
 
   if (error) {

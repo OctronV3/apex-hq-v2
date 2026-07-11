@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function getCurrentUser() {
-  const supabase = await createClient();
+export async function getCurrentUser(supabase: SupabaseClient) {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return null;
@@ -10,19 +9,17 @@ export async function getCurrentUser() {
   return data.user;
 }
 
-export async function getWorkspaceId(request: NextRequest) {
+export async function getWorkspaceId(
+  supabase: SupabaseClient,
+  request: NextRequest
+) {
   const cookieWorkspace = request.cookies.get("apex-workspace")?.value;
-  const user = await getCurrentUser();
-  if (!user) return null;
-
-  const supabase = await createClient();
 
   if (cookieWorkspace) {
     const { data: member } = await supabase
       .from("workspace_members")
       .select("workspace_id")
       .eq("workspace_id", cookieWorkspace)
-      .eq("user_id", user.id)
       .single();
     if (member) return cookieWorkspace;
   }
@@ -30,7 +27,6 @@ export async function getWorkspaceId(request: NextRequest) {
   const { data: firstMember } = await supabase
     .from("workspace_members")
     .select("workspace_id")
-    .eq("user_id", user.id)
     .order("created_at", { ascending: true })
     .single();
 
@@ -38,16 +34,14 @@ export async function getWorkspaceId(request: NextRequest) {
 }
 
 export async function auditLog(
+  supabase: SupabaseClient,
   workspaceId: string,
+  userId: string | null,
   action: string,
   tableName: string,
   recordId?: string,
   metadata?: Record<string, unknown>
 ) {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  const userId = data.user?.id || null;
-
   await supabase.rpc("log_audit", {
     p_workspace_id: workspaceId,
     p_user_id: userId,

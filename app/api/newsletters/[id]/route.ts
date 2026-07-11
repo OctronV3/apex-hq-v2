@@ -7,14 +7,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
 
-  const workspaceId = await getWorkspaceId(request);
+  const [user, workspaceId] = await Promise.all([
+    getCurrentUser(supabase),
+    getWorkspaceId(supabase, request),
+  ]);
+
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
 
   const body = await request.json();
-  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("newsletters")
@@ -26,7 +29,7 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await auditLog(workspaceId, "UPDATE", "newsletters", id, body);
+  await auditLog(supabase, workspaceId, user.id, "UPDATE", "newsletters", id, body);
 
   return NextResponse.json({ newsletter: data });
 }
@@ -36,13 +39,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const workspaceId = await getWorkspaceId(request);
-  if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
-
   const supabase = await createClient();
+
+  const [user, workspaceId] = await Promise.all([
+    getCurrentUser(supabase),
+    getWorkspaceId(supabase, request),
+  ]);
+
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
 
   const { error } = await supabase
     .from("newsletters")
@@ -52,7 +57,7 @@ export async function DELETE(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await auditLog(workspaceId, "DELETE", "newsletters", id);
+  await auditLog(supabase, workspaceId, user.id, "DELETE", "newsletters", id);
 
   return NextResponse.json({ success: true });
 }

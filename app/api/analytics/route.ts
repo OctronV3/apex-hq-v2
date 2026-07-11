@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, getWorkspaceId } from "@/lib/api-helpers";
+import { getWorkspaceId } from "@/lib/api-helpers";
 
 export async function GET(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-  const workspaceId = await getWorkspaceId(request);
-  if (!workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 400 });
+  if (sessionError || !sessionData.session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const workspaceId = await getWorkspaceId(supabase, request);
+  if (!workspaceId) {
+    return NextResponse.json({ error: "No workspace" }, { status: 400 });
+  }
 
   const kind = request.nextUrl.searchParams.get("kind");
-  const supabase = await createClient();
 
   if (kind === "revenue") {
     const { data, error } = await supabase

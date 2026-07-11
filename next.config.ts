@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: isTauri,
   },
+  turbopack: {
+    root: process.cwd(),
+  },
 };
 
 export default nextConfig;
