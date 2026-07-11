@@ -51,12 +51,13 @@ function stageColor(stage: PipelineStage) {
 function AddNewsletterDialog({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
+  const [stage, setStage] = useState<PipelineStage>("idea");
   const add = useAddNewsletter();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     add.mutate(
-      { title, author: author || "Operator", stage: "idea", tags: [] },
+      { title, author: author || "Operator", stage, tags: [] },
       { onSuccess: () => setOpen(false) }
     );
   }
@@ -83,6 +84,21 @@ function AddNewsletterDialog({ open, setOpen }: { open: boolean; setOpen: (v: bo
               onChange={(e) => setAuthor(e.target.value)}
               className="bg-[#111111] border-[#222222] text-white"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Stage</Label>
+            <Select value={stage} onValueChange={(v) => setStage(v as PipelineStage)}>
+              <SelectTrigger className="bg-[#111111] border-[#222222] text-white">
+                <SelectValue placeholder="Select stage" />
+              </SelectTrigger>
+              <SelectContent className="border-[#222222] bg-[#0a0a0a] text-white">
+                {stages.map((s) => (
+                  <SelectItem key={s.key} value={s.key} className="text-white">
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <Button type="submit" className="bg-[#ff1a1a] hover:bg-[#d60a0a] text-white">
             Add to pipeline
