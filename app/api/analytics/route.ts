@@ -3,7 +3,8 @@ import { parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceId } from "@/lib/api-helpers";
 import { computeKpiStats, computeRevenueTimeSeries } from "@/lib/analytics";
-import type { Sponsor, NewsletterItem } from "@/types";
+import { getPlausibleConfig, fetchPlausibleTimeSeries } from "@/lib/plausible";
+import type { Sponsor, NewsletterItem, TrafficPoint } from "@/types";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -51,13 +52,28 @@ export async function GET(request: NextRequest) {
   }
 
   if (kind === "traffic") {
+    const plausible = getPlausibleConfig();
+    if (plausible) {
+      try {
+        const results = await fetchPlausibleTimeSeries(plausible, "6mo");
+        const data: TrafficPoint[] = results.map((row) => ({
+          date: row.date,
+          visitors: row.visitors,
+          pageViews: row.pageviews,
+        }));
+        return NextResponse.json({ data, source: "plausible" });
+      } catch (e) {
+        console.error("Plausible fetch failed, falling back to stored traffic.", e);
+      }
+    }
+
     const { data, error } = await supabase
       .from("analytics_traffic")
       .select("date, visitors, page_views")
       .eq("workspace_id", workspaceId)
       .order("date", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, source: "database" });
   }
 
   if (kind === "social") {

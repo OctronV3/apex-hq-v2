@@ -512,7 +512,7 @@ export async function getTrafficData(): Promise<TrafficPoint[]> {
   return data.map((row) => ({
     date: row.date as string,
     visitors: row.visitors as number,
-    pageViews: row.page_views as number,
+    pageViews: (row.pageViews ?? row.page_views) as number,
   }));
 }
 
