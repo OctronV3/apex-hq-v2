@@ -1,7 +1,12 @@
 #[tauri::command]
 fn open_social_webview(app: tauri::AppHandle, platform: String, url: String) -> Result<(), String> {
-  let label = format!("social-{}", platform);
-  let title = format!("{} - Apex HQ", platform.to_uppercase());
+  open_integration_webview(app, platform, url)
+}
+
+#[tauri::command]
+fn open_integration_webview(app: tauri::AppHandle, provider: String, url: String) -> Result<(), String> {
+  let label = format!("integration-{}", provider);
+  let title = format!("{} - Apex HQ", provider.to_uppercase());
 
   let _window = tauri::webview::WebviewWindowBuilder::new(
     &app,
@@ -19,7 +24,7 @@ fn open_social_webview(app: tauri::AppHandle, platform: String, url: String) -> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![open_social_webview])
+    .invoke_handler(tauri::generate_handler![open_social_webview, open_integration_webview])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

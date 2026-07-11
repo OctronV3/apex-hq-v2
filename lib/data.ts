@@ -17,6 +17,7 @@ import {
   Notification,
   CalendarEvent,
 } from "@/types";
+import { Integration, ProviderInfo, getRegistry, getProvider } from "@/lib/integrations";
 
 const API_BASE = "/api";
 
@@ -762,3 +763,158 @@ export async function deleteSocialConnection(id: string): Promise<void> {
 
   await fetchJson(`/social-connections/${id}`, { method: "DELETE" });
 }
+
+// ---- Integrations ----
+
+export async function getAvailableProviders(): Promise<ProviderInfo[]> {
+  if (isTauri()) {
+    return getRegistry().map((p) => ({
+      slug: p.slug,
+      name: p.name,
+      type: p.type,
+      description: p.description,
+      isConfigured: p.isConfigured(),
+      isWebview: p.isWebview,
+      connectFields: p.getConnectFields?.() || [],
+      canSync: !!p.sync,
+      canPublish: !!p.publish,
+    }));
+  }
+
+  const { providers } = await fetchJson<{ providers: ProviderInfo[] }>("/integrations/available");
+  return providers;
+}
+
+export async function getIntegrations(type?: string): Promise<Integration[]> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    let query = supabase
+      .from("integrations")
+      .select("id, workspace_id, user_id, provider_slug, type, status, display_name, config, created_at, updated_at")
+      .eq("workspace_id", workspaceId);
+    if (type) query = query.eq("type", type);
+    const { data, error } = await query.order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => toCamel<Integration>(row));
+  }
+
+  const search = new URLSearchParams();
+  if (type) search.set("type", type);
+  const { integrations } = await fetchJson<{ integrations: Record<string, unknown>[] }>(
+    `/integrations?${search.toString()}`
+  );
+  return integrations.map((row) => toCamel<Integration>(row));
+}
+
+export async function connectIntegration(
+  providerSlug: string,
+  input: Record<string, unknown>
+): Promise<{ integration: Integration; webviewUrl?: string | null }> {
+  if (isTauri()) {
+    const provider = getProvider(providerSlug);
+    if (!provider) throw new Error("Unknown provider");
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not configured");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const config = await provider.connect(input);
+    const payload = toSnake({
+      workspaceId,
+      providerSlug: provider.slug,
+      type: provider.type,
+      status: "connected",
+      displayName: config.displayName || provider.name,
+      config: config.config || {},
+      credentials: config.credentials || {},
+    });
+    const { data, error } = await supabase
+      .from("integrations")
+      .insert(payload)
+      .select("id, workspace_id, user_id, provider_slug, type, status, display_name, config, created_at, updated_at")
+      .single();
+    if (error) throw new Error(error.message);
+    const integration = toCamel<Integration>(data);
+    return { integration, webviewUrl: provider.getWebviewUrl?.(integration.config) };
+  }
+
+  const { integration, webviewUrl } = await fetchJson<{ integration: Record<string, unknown>; webviewUrl?: string | null }>(
+    `/integrations/${providerSlug}/connect`,
+    { method: "POST", body: JSON.stringify({ input }) }
+  );
+  return { integration: toCamel<Integration>(integration), webviewUrl };
+}
+
+export async function syncIntegration(providerSlug: string, id: string): Promise<{ ok: boolean; message?: string; updated?: unknown }> {
+  if (isTauri()) {
+    const provider = getProvider(providerSlug);
+    if (!provider || !provider.sync) throw new Error("Provider does not support sync");
+    const supabase = getSupabase();
+    if (!supabase) throw new Error("Supabase not configured");
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) throw new Error("No workspace");
+    const { data, error } = await supabase
+      .from("integrations")
+      .select("*")
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .single();
+    if (error || !data) throw new Error(error?.message || "Integration not found");
+    const result = await provider.sync(toCamel<Integration>(data));
+    if (providerSlug === "plausible" && result.ok && result.updated) {
+      const points = (result.updated as unknown as { date: string; visitors: number; pageviews: number }[]).map((row) => ({
+        workspace_id: workspaceId,
+        date: row.date,
+        visitors: row.visitors,
+        page_views: row.pageviews,
+      }));
+      await supabase.from("analytics_traffic").upsert(points, { onConflict: "workspace_id,date" });
+    }
+    if (providerSlug === "beehiiv" && result.ok && result.updated) {
+      await supabase
+        .from("integrations")
+        .update({
+          config: {
+            ...(data.config || {}),
+            subscribers: (result.updated as { subscribers?: number }).subscribers,
+            posts: (result.updated as { posts?: unknown[] }).posts,
+          },
+        })
+        .eq("id", id);
+    }
+    return result;
+  }
+
+  return fetchJson<{ ok: boolean; message?: string; updated?: unknown }>(
+    `/integrations/${providerSlug}/sync`,
+    { method: "POST", body: JSON.stringify({ id }) }
+  );
+}
+
+export async function publishIntegration(providerSlug: string, id: string, payload: unknown): Promise<unknown> {
+  return fetchJson<{ result: unknown }>(`/integrations/${providerSlug}/publish`, {
+    method: "POST",
+    body: JSON.stringify({ id, payload }),
+  });
+}
+
+export async function deleteIntegration(id: string): Promise<void> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return;
+    const { error } = await supabase
+      .from("integrations")
+      .delete()
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  await fetchJson(`/integrations/${id}`, { method: "DELETE" });
+}
+

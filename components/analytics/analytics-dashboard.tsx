@@ -22,6 +22,7 @@ import {
   useSocialMetrics,
   useKpis,
 } from "@/hooks/use-apex";
+import { IntegrationGrid } from "@/components/integrations/integration-grid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -288,6 +289,7 @@ export function AnalyticsDashboard() {
         <TabsTrigger value="revenue" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Revenue</TabsTrigger>
         <TabsTrigger value="traffic" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Traffic</TabsTrigger>
         <TabsTrigger value="social" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Social</TabsTrigger>
+        <TabsTrigger value="integrations" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Integrations</TabsTrigger>
       </TabsList>
       <TabsContent value="revenue" className="mt-4">
         <RevenueTab />
@@ -297,6 +299,12 @@ export function AnalyticsDashboard() {
       </TabsContent>
       <TabsContent value="social" className="mt-4">
         <SocialTab />
+      </TabsContent>
+      <TabsContent value="integrations" className="mt-4">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Analytics sources</h3>
+          <IntegrationGrid type="analytics" />
+        </div>
       </TabsContent>
     </Tabs>
   );

@@ -9,6 +9,7 @@ import {
   useDeleteEmail,
 } from "@/hooks/use-apex";
 import { EmailMessage, EmailFolder } from "@/types";
+import { IntegrationGrid } from "@/components/integrations/integration-grid";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,6 +179,7 @@ export function EmailClient() {
         <TabsTrigger value="inbox" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Inbox</TabsTrigger>
         <TabsTrigger value="sent" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Sent</TabsTrigger>
         <TabsTrigger value="compose" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Compose</TabsTrigger>
+        <TabsTrigger value="integrations" className="data-[active]:bg-[#ff1a1a] data-[active]:text-white">Integrations</TabsTrigger>
       </TabsList>
       <TabsContent value="inbox" className="mt-4">
         <EmailList folder="inbox" />
@@ -187,6 +189,12 @@ export function EmailClient() {
       </TabsContent>
       <TabsContent value="compose" className="mt-4">
         <ComposeEmail onSent={() => setActiveTab("sent")} />
+      </TabsContent>
+      <TabsContent value="integrations" className="mt-4">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Email providers</h3>
+          <IntegrationGrid type="email" />
+        </div>
       </TabsContent>
     </Tabs>
   );

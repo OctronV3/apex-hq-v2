@@ -1,4 +1,5 @@
 import { PipelineBoard } from "@/components/newsletter/pipeline-board";
+import { IntegrationGrid } from "@/components/integrations/integration-grid";
 
 export default function NewsletterPage() {
   return (
@@ -8,6 +9,10 @@ export default function NewsletterPage() {
         <p className="text-[#888888]">Ideas, drafts, scheduled sends, and published issues.</p>
       </div>
       <PipelineBoard />
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-white">Newsletter integrations</h3>
+        <IntegrationGrid type="newsletter" />
+      </div>
     </div>
   );
 }

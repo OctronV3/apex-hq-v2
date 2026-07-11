@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { SocialHub } from "@/components/social/social-hub";
 import { SocialDashboard } from "@/components/social/social-dashboard";
+import { IntegrationGrid } from "@/components/integrations/integration-grid";
 import { Button } from "@/components/ui/button";
 
 export default function SocialPage() {
@@ -42,7 +42,14 @@ export default function SocialPage() {
           </Button>
         </div>
       </div>
-      {tab === "hub" ? <SocialHub /> : <SocialDashboard />}
+      {tab === "hub" ? (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-white">Connected platforms</h3>
+          <IntegrationGrid type="social" />
+        </div>
+      ) : (
+        <SocialDashboard />
+      )}
     </div>
   );
 }

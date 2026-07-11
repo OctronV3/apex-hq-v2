@@ -33,6 +33,12 @@ import {
   syncNotifications,
   markNotification,
   getCalendarEvents,
+  getAvailableProviders,
+  getIntegrations,
+  connectIntegration,
+  syncIntegration,
+  publishIntegration,
+  deleteIntegration,
 } from "@/lib/data";
 import {
   NewsletterItem,
@@ -47,12 +53,15 @@ import {
   Notification,
   CalendarEvent,
 } from "@/types";
+import { Integration, ProviderInfo } from "@/lib/integrations";
 
 export const queryKeys = {
   newsletters: ["newsletters"] as const,
   sponsors: ["sponsors"] as const,
   socialPosts: ["social-posts"] as const,
   socialConnections: ["social-connections"] as const,
+  integrations: ["integrations"] as const,
+  availableProviders: ["available-providers"] as const,
   emails: ["emails"] as const,
   revenue: ["analytics", "revenue"] as const,
   traffic: ["analytics", "traffic"] as const,
@@ -284,5 +293,50 @@ export function useCalendarEvents() {
   return useQuery<CalendarEvent[]>({
     queryKey: queryKeys.calendar,
     queryFn: getCalendarEvents,
+  });
+}
+
+// Integrations
+export function useIntegrations(type?: string) {
+  return useQuery<Integration[]>({
+    queryKey: [...queryKeys.integrations, type || "all"],
+    queryFn: () => getIntegrations(type),
+  });
+}
+
+export function useAvailableProviders() {
+  return useQuery<ProviderInfo[]>({
+    queryKey: queryKeys.availableProviders,
+    queryFn: getAvailableProviders,
+  });
+}
+
+export function useConnectIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ providerSlug, input }: { providerSlug: string; input: Record<string, unknown> }) =>
+      connectIntegration(providerSlug, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.integrations }),
+  });
+}
+
+export function useSyncIntegration() {
+  return useMutation({
+    mutationFn: ({ providerSlug, id }: { providerSlug: string; id: string }) => syncIntegration(providerSlug, id),
+  });
+}
+
+export function usePublishIntegration() {
+  return useMutation({
+    mutationFn: ({ providerSlug, id, payload }: { providerSlug: string; id: string; payload: unknown }) =>
+      publishIntegration(providerSlug, id, payload),
+  });
+}
+
+export function useDeleteIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: deleteIntegration,
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.integrations }),
   });
 }

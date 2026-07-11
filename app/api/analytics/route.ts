@@ -73,7 +73,8 @@ export async function GET(request: NextRequest) {
       .eq("workspace_id", workspaceId)
       .order("date", { ascending: true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ data, source: "database" });
+    const mapped = (data || []).map((row) => ({ date: row.date, visitors: row.visitors, pageViews: row.page_views }));
+    return NextResponse.json({ data: mapped, source: "database" });
   }
 
   if (kind === "social") {
