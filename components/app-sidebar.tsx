@@ -11,6 +11,7 @@ import {
   Share2,
   Shield,
   Users,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -24,6 +25,7 @@ const navItems = [
   { name: "Dashboard", href: "/", icon: Home },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Newsletter", href: "/newsletter", icon: Newspaper },
+  { name: "Calendar", href: "/calendar", icon: Calendar },
   { name: "Sponsors", href: "/sponsors", icon: Users },
   { name: "Social", href: "/social", icon: Share2 },
   { name: "Email", href: "/email", icon: Mail },

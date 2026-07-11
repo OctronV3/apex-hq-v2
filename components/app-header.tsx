@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CommandMenu } from "./command-menu";
 import { UserNav } from "./user-nav";
+import { NotificationsDropdown } from "./notifications/notifications-dropdown";
 
 interface AppHeaderProps {
   onMenuClick: () => void;
@@ -37,14 +38,7 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
       </div>
       <div className="flex items-center gap-3">
         <CommandMenu />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative text-[#888888] hover:text-white"
-        >
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#ff1a1a]" />
-        </Button>
+        <NotificationsDropdown />
         <UserNav />
       </div>
     </header>

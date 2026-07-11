@@ -25,6 +25,10 @@ import {
   getTrafficData,
   getSocialMetrics,
   getKpiStats,
+  getNotifications,
+  syncNotifications,
+  markNotification,
+  getCalendarEvents,
 } from "@/lib/data";
 import {
   NewsletterItem,
@@ -35,6 +39,8 @@ import {
   RevenuePoint,
   TrafficPoint,
   SocialMetric,
+  Notification,
+  CalendarEvent,
 } from "@/types";
 
 export const queryKeys = {
@@ -46,6 +52,8 @@ export const queryKeys = {
   traffic: ["analytics", "traffic"] as const,
   socialMetrics: ["analytics", "social-metrics"] as const,
   kpis: ["analytics", "kpis"] as const,
+  notifications: ["notifications"] as const,
+  calendar: ["calendar"] as const,
 };
 
 // Newsletter
@@ -201,5 +209,42 @@ export function useKpis() {
   return useQuery({
     queryKey: queryKeys.kpis,
     queryFn: getKpiStats,
+  });
+}
+
+// Notifications
+export function useNotifications() {
+  return useQuery<Notification[]>({
+    queryKey: queryKeys.notifications,
+    queryFn: getNotifications,
+  });
+}
+
+export function useSyncNotifications() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: syncNotifications,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications });
+    },
+  });
+}
+
+export function useMarkNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<Pick<Notification, "read" | "dismissed">> }) =>
+      markNotification(id, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.notifications });
+    },
+  });
+}
+
+// Calendar
+export function useCalendarEvents() {
+  return useQuery<CalendarEvent[]>({
+    queryKey: queryKeys.calendar,
+    queryFn: getCalendarEvents,
   });
 }

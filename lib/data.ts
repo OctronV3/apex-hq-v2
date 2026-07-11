@@ -2,6 +2,7 @@ import { computeKpiStats, computeRevenueTimeSeries } from "./analytics";
 import { parseISO } from "date-fns";
 import { getSupabase } from "./supabase/client";
 import { isTauri } from "./env";
+import { toCamel, toSnake } from "./utils";
 import {
   NewsletterItem,
   Sponsor,
@@ -12,6 +13,8 @@ import {
   TrafficPoint,
   SocialMetric,
   KpiStats,
+  Notification,
+  CalendarEvent,
 } from "@/types";
 
 const API_BASE = "/api";
@@ -34,24 +37,6 @@ async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(err.error || `Request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
-}
-
-function toCamel<T>(obj: Record<string, unknown>): T {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const camel = key.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase());
-    out[camel] = value;
-  }
-  return out as T;
-}
-
-function toSnake(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const snake = key.replace(/[A-Z]/g, (ch) => `_${ch.toLowerCase()}`);
-    out[snake] = value;
-  }
-  return out;
 }
 
 function toEmail(row: Record<string, unknown>): EmailMessage {
@@ -571,4 +556,114 @@ export async function getKpiStats(): Promise<KpiStats | null> {
 
   const { data } = await fetchJson<{ data: KpiStats }>("/analytics?kind=kpi");
   return data;
+}
+
+// ---- Notifications ----
+
+export async function getNotifications(): Promise<Notification[]> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return [];
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .eq("dismissed", false)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map((row) => toCamel<Notification>(row));
+  }
+
+  const { notifications } = await fetchJson<{ notifications: Record<string, unknown>[] }>(
+    "/notifications"
+  );
+  return notifications.map((row) => toCamel<Notification>(row));
+}
+
+export async function syncNotifications(): Promise<number> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return 0;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return 0;
+    const { data: user } = await supabase.auth.getUser();
+
+    const [newsletters, sponsors, socialPosts] = await Promise.all([
+      getNewsletters(),
+      getSponsors(),
+      getSocialPosts(),
+    ]);
+
+    await supabase
+      .from("notifications")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("is_generated", true)
+      .eq("dismissed", false);
+
+    const { generateNotifications, notificationToInput } = await import("./notifications");
+    const inputs = generateNotifications(newsletters, sponsors, socialPosts).map((n) =>
+      notificationToInput(n, workspaceId, user.user?.id)
+    );
+
+    if (inputs.length) {
+      const payload = inputs.map((n) => toSnake(n as Record<string, unknown>));
+      const { error } = await supabase.from("notifications").insert(payload);
+      if (error) throw new Error(error.message);
+    }
+    return inputs.length;
+  }
+
+  const { count } = await fetchJson<{ count: number }>("/notifications/sync", {
+    method: "POST",
+  });
+  return count;
+}
+
+export async function markNotification(
+  id: string,
+  patch: Partial<Pick<Notification, "read" | "dismissed">>
+): Promise<Notification | null> {
+  if (isTauri()) {
+    const supabase = getSupabase();
+    if (!supabase) return null;
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return null;
+    const { data, error } = await supabase
+      .from("notifications")
+      .update(toSnake(patch as Record<string, unknown>))
+      .eq("id", id)
+      .eq("workspace_id", workspaceId)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return toCamel<Notification>(data);
+  }
+
+  const { notification } = await fetchJson<{ notification: Record<string, unknown> }>(
+    `/notifications/${id}`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+  return toCamel<Notification>(notification);
+}
+
+// ---- Calendar ----
+
+export async function getCalendarEvents(): Promise<CalendarEvent[]> {
+  if (isTauri()) {
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return [];
+    const [newsletters, sponsors, socialPosts] = await Promise.all([
+      getNewsletters(),
+      getSponsors(),
+      getSocialPosts(),
+    ]);
+    const { generateCalendarEvents } = await import("./calendar");
+    return generateCalendarEvents(newsletters, sponsors, socialPosts);
+  }
+
+  const { events } = await fetchJson<{ events: CalendarEvent[] }>("/calendar");
+  return events;
 }

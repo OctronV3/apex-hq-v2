@@ -99,3 +99,29 @@ export interface KpiStats {
   totalSponsors: number;
   sponsorGrowth: number;
 }
+
+export interface Notification {
+  id: string;
+  workspaceId: string;
+  userId?: string;
+  type: string;
+  title: string;
+  message: string;
+  link?: string;
+  read: boolean;
+  dismissed: boolean;
+  isGenerated: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  type: "newsletter" | "sponsor" | "social";
+  title: string;
+  date: string;
+  endDate?: string;
+  status?: string;
+  color: string;
+  link: string;
+}
